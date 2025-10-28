@@ -279,7 +279,7 @@ def _build_and_show_outputs():
     pts = ss["prof_points"]
     if len(pts) < 2:
         st.warning("Añade origen y destino (mínimo 2 puntos).")
-        return
+        return # <--- CORRECCIÓN CLAVE: Detener la ejecución aquí si hay menos de 2 puntos
         
     o_text = pts[0]
     d_text = pts[-1]
