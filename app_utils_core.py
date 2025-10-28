@@ -4,8 +4,9 @@ import streamlit as st
 from dotenv import load_dotenv
 import googlemaps
 
-# ----------------- LECTURA DE CLAVES DE API -----------------
+# Cargar variables de entorno
 load_dotenv()
+# Usamos el nombre de variable que el usuario tiene en su .env
 GMAPS_API_KEY = os.getenv("GOOGLE_API_KEY") 
 
 # Inicialización del cliente de Google Maps
@@ -19,14 +20,14 @@ def get_gmaps_client():
         client = googlemaps.Client(key=key_to_use)
         client.geocode("Barcelona")
         return client
-    except Exception as e:
-        st.error(f"Error al inicializar la API de Google Maps: {e}")
+    except Exception:
         return None
 
 GMAPS_CLIENT = get_gmaps_client()
 
-# ----------------- Funciones de Geocodificación y URL -----------------
-
+# ---------------------------------------------------------------------------
+# Geocodificación Real (Implementación)
+# ---------------------------------------------------------------------------
 def geocode_address(query):
     if not GMAPS_CLIENT:
         return None
@@ -56,6 +57,8 @@ def resolve_selection(label, meta=None):
     return {"address": (label or "").strip(), "coords": (label or "").strip()}
 
 
+# ----------------- Construcción de URLs -----------------
+
 def _encode(s: str) -> str:
     """Codifica la cadena para URL."""
     return urllib.parse.quote_plus(s or "")
@@ -63,7 +66,7 @@ def _encode(s: str) -> str:
 
 def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", avoid=None):
     """
-    Implementación FINAL de optimización que evita el punto fantasma.
+    Implementación FINAL de optimización que evita el punto fantasma (corregido).
     """
     origin = origin_meta.get("coords", origin_meta.get("address"))
     destination = destination_meta.get("coords", destination_meta.get("address"))
@@ -82,11 +85,11 @@ def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="dr
         # Codificamos individualmente y unimos con el separador de URL: '|'
         encoded_waypoints_list = [_encode(w.strip()) for w in waypoints_for_url if (w or "").strip()]
         
-        # Unimos con '|' y añadimos el prefijo de optimización
-        waypoints_string = "optimize:false|" + "|".join(encoded_waypoints_list)
+        # Añadimos el prefijo de optimización y lo unimos.
+        # Esto asegura que 'optimize:true|' sea un comando, no una parada.
+        waypoints_string = "optimize:true|" + "|".join(encoded_waypoints_list)
         
-        # El comando 'url_parts.append' solo añade la cadena, no hay doble codificación.
-        # Reemplazamos los '|' por %7C
+        # Reemplazamos los '|' por %7C para el query string
         params.append(f"waypoints={waypoints_string.replace('|', '%7C')}")
         
     if avoid:
