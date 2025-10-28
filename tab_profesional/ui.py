@@ -7,7 +7,7 @@ import streamlit as st
 import qrcode
 
 from app_utils_core import (
-    build_gmaps_url,         # firma sin "optimize"
+    build_gmaps_url,
     build_waze_url,
     build_apple_maps_url,
     resolve_selection,
@@ -21,8 +21,10 @@ MAX_POINTS = 10
 
 
 # ---------------------------
-# Estado
+# ESTADO - (LA FUNCIÓN _init_state HA SIDO ELIMINADA DE AQUÍ)
 # ---------------------------
+# Estas funciones dependen de la inicialización de estado que se hace en photo_agent_app.py
+
 def _get_user_routes_path():
     """Devuelve el objeto Path del archivo de rutas del usuario logeado."""
     username = st.session_state.get('username', 'default')
@@ -94,7 +96,7 @@ def _move_point_up(i: int):
 def _move_point_down(i: int):
     pts = st.session_state["prof_points"]
     if i < len(pts) - 1:
-        pts[i+1], pts[i] = pts[i], pts[i+1]
+        pts[i+1], pts[i] = pts[i], pts[i-1]
         _bump_list_version()
     st.rerun()
 
@@ -296,7 +298,6 @@ def _build_and_show_outputs():
         low = s.lower()
         # Ahora: descartamos solo el token exacto "optimize" o "optimize:true"
         if low in ("optimize", "optimize:true"):
-            # entrada explícita de control -> descartamos
             continue
         filtered_w_texts.append(s)
 

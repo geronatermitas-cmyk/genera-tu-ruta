@@ -1,8 +1,9 @@
 import streamlit as st
-from photo_agent_app import main, init_session_state
+from photo_agent_app import main, init_session_state, _init_state_ui
 
-# 💥 CORRECCIÓN FINAL: Inicializamos el estado de sesión antes de cualquier otra cosa.
+# 💥 CORRECCIÓN FINAL: Inicializamos el estado de sesión antes de cualquier cosa.
 init_session_state()
+_init_state_ui()
 
 st.set_page_config(page_title="AppRutas", layout="wide")
 
