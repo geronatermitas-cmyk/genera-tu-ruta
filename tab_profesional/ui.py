@@ -73,12 +73,14 @@ def _add_point(val: str):
         st.warning(f"Límite de {MAX_POINTS} puntos.")
         return
     ss["prof_points"].append(val)
+    
+    # === CORRECCIÓN: LIMPIAR EL INPUT ===
     if "prof_text_input" in ss:
-        # Limpiamos la barra de búsqueda borrando la clave
         del ss["prof_text_input"]
+    # ==================================
+    
     _bump_list_version()
     st.rerun()
-
 
 def _clear_points():
     ss = st.session_state
@@ -298,11 +300,10 @@ def _save_load_col():
 # Generar y salidas
 # ---------------------------
 
-
 def _build_and_show_outputs():
     ss = st.session_state
     
-    # Inicialización de variables para EVITAR NameError 
+    # Inicialización de variables
     o_meta = None
     d_meta = None
 
@@ -324,47 +325,37 @@ def _build_and_show_outputs():
     # La bandera de optimización se pasa directamente desde la sesión
     optimize_flag = ss.get('optimize_route', False)
     
-    # === GENERACIÓN DE URLS MULTIPLES ===
-    # 1. Enlace Web (Estándar, funciona en todos los navegadores)
-    gmaps_web = build_gmaps_web_url(
-        o_meta, d_meta, waypoints_meta=waypoints_meta if waypoints_meta else None, optimize=optimize_flag
-    )
-    # 2. Esquema de Navegación Directa (Abre app con intención de navegar - ideal para Android scheme)
-    gmaps_nav_scheme = build_gmaps_app_link_navigation(d_meta, o_meta) 
-    # 3. Android Intent (Mejor compatibilidad en navegadores Android)
-    gmaps_intent = build_gmaps_android_intent_url(
-        o_meta, d_meta, waypoints_meta=waypoints_meta if waypoints_meta else None, optimize=optimize_flag
-    )
-    # 4. Esquema iOS (Para Google Maps en iPhone/iPad)
-    gmaps_ios = build_gmaps_ios_comgooglemaps(o_meta, d_meta)
+    # === GENERACIÓN DE URLS ===
+    # Solo generamos el enlace web estándar (build_gmaps_web_url)
+    # y los enlaces de Waze y Apple Maps.
     
-    # Guardamos el enlace web estándar para el QR
-    ss["last_gmaps_url"] = gmaps_web
+    gmaps_web = build_gmaps_web_url(
+        o_meta, d_meta, 
+        waypoints_meta=waypoints_meta if waypoints_meta else None, 
+        optimize=optimize_flag
+    )
+    
+    ss["last_gmaps_url"] = gmaps_web # Guardamos este para el QR
+    waze = build_waze_url(o_meta, d_meta)
+    apple = build_apple_maps_url(o_meta, d_meta)
 
     st.success("Ruta generada. Elige cómo abrirla 👇")
     
-    # === RENDER DE BOTONES ===
-    
     st.markdown("---")
-    st.markdown("**🗺️ Abrir en Google Maps**")
-    col_a, col_b, col_c = st.columns([2,2,2])
-    with col_a:
-        st.link_button("Maps (Web)", gmaps_web, use_container_width=True)
-    with col_b:
-        st.link_button("Maps (App • Android)", gmaps_intent, use_container_width=True)
-    with col_c:
-        st.link_button("Maps • Navegar (Scheme)", gmaps_nav_scheme, use_container_width=True)
-
-    # Botón para iOS (separado por si el formato es distinto)
-    st.link_button("Maps (iOS • Google Maps)", gmaps_ios, use_container_width=True)
-
-    # Botones ya existentes para Waze y Apple Maps
-    waze = build_waze_url(o_meta, d_meta)
-    apple = build_apple_maps_url(o_meta, d_meta)
     
+    # === RENDER DE BOTONES UNIFICADOS ===
+    
+    # Botón UNIFICADO para Google Maps (el móvil/navegador preguntará dónde abrir)
+    st.link_button("🗺️ Abrir Ruta (Google Maps)", gmaps_web, type="primary", use_container_width=True)
+
     st.markdown("---")
-    st.link_button("🚗 Waze", waze, use_container_width=True)
-    st.link_button("🍎 Apple Maps", apple, use_container_width=True)
+
+    # Botones de Apps Alternativas
+    col_waze, col_apple = st.columns(2)
+    with col_waze:
+        st.link_button("🚗 Abrir en Waze", waze, use_container_width=True)
+    with col_apple:
+        st.link_button("🍎 Abrir en Apple Maps", apple, use_container_width=True)
 
     st.markdown("---")
     st.caption("Escanea el QR (Google Maps Web)")
@@ -372,9 +363,8 @@ def _build_and_show_outputs():
         img_buf = _qr_image_for(ss["last_gmaps_url"])
         st.image(img_buf, caption="QR", width=220)
 
-# ---------------------------
-# Entrada principal
-# ---------------------------
+
+
 def mostrar_profesional():
     # El estado se inicializa fuera de esta función
     
