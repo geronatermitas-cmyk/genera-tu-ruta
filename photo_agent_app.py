@@ -1,4 +1,4 @@
-# photo_agent_app.py - Código con Inicialización de Estado Reforzada (FINAL)
+# photo_agent_app.py - Código Final Funcional (Corrección Final de Inicialización)
 import streamlit as st
 import yaml
 from yaml.loader import SafeLoader
@@ -66,7 +66,7 @@ def check_password(username, password_unhashed, config):
 
 def clear_route_state():
     """Función que borra las variables de ruta al cerrar sesión."""
-    for key in ["prof_points", "saved_routes", "route_name_input", "saved_choice", "_current_routes_user", "logged_in", "username", "name"]:
+    for key in ["prof_points", "saved_routes", "route_name_input", "saved_choice", "_current_routes_user", "logged_in", "username", "name", "list_version"]:
         if key in st.session_state:
             del st.session_state[key]
 
@@ -77,36 +77,38 @@ if not os.getenv("GOOGLE_API_KEY"):
     st.sidebar.warning("⚠️ Clave API de Google no configurada. La Geocodificación será SIMULADA.")
 
 
-# Cargar configuraciones (se mantiene fuera de main)
+# Cargar configuraciones
 config = load_config()
 
-
+# Inicialización de estado de Autenticación
 def init_session_state():
-    """Inicializa todas las claves de st.session_state de forma segura."""
+    """Inicializa todas las claves de st.session_state de forma segura (Autenticación)."""
     st.session_state.setdefault('logged_in', False)
     st.session_state.setdefault('show_register', False)
     st.session_state.setdefault('username', None)
     st.session_state.setdefault('name', None)
-
-# 💥 CORRECCIÓN CRÍTICA: Llamamos a la inicialización al inicio del script.
-init_session_state()
 
 # ----------------- LÓGICA DE LA APLICACIÓN -----------------
 
 DONATION_URL = "https://www.paypal.com/donate/?business=73LFHKS2WCQ9U&no_recurring=0&item_name=Ayuda+para+desarrolladores&currency_code=EUR"
 
 def _import_ui():
-    """Importa la UI de forma robusta."""
+    """Importa la UI y su inicialización de estado de forma robusta."""
     try:
-        from tab_profesional.ui import mostrar_profesional
-        return mostrar_profesional
+        from tab_profesional.ui import mostrar_profesional, _init_state
+        return mostrar_profesional, _init_state
     except Exception:
         import importlib
         mod = importlib.import_module("tab_profesional.ui")
-        return getattr(mod, "mostrar_profesional")
+        return getattr(mod, "mostrar_profesional"), getattr(mod, "_init_state")
 
 
-mostrar_profesional = _import_ui()
+# Importamos la función de UI y la función de inicialización de estado
+mostrar_profesional, _init_state_ui = _import_ui()
+
+# 💥 CORRECCIÓN FINAL: Inicializamos AMBOS estados al inicio del script.
+init_session_state() # Inicializa logged_in, username, etc.
+_init_state_ui()     # Inicializa list_version, saved_routes, etc.
 
 
 def main():
