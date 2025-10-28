@@ -7,7 +7,7 @@ import streamlit as st
 import qrcode
 
 from app_utils_core import (
-    build_gmaps_url,
+    build_gmaps_url,         # firma sin "optimize"
     build_waze_url,
     build_apple_maps_url,
     resolve_selection,
@@ -25,7 +25,6 @@ MAX_POINTS = 10
 # ---------------------------
 def _get_user_routes_path():
     """Devuelve el objeto Path del archivo de rutas del usuario logeado."""
-    # Usamos 'default' si el usuario no está logeado (no debería pasar aquí)
     username = st.session_state.get('username', 'default')
     return ROUTES_DIR / f"routes_{username}.json"
 
@@ -39,33 +38,6 @@ def _load_routes_file():
         pass
     return {}
 
-
-def _init_state():
-    ss = st.session_state
-    ss.setdefault("prof_points", [])
-    ss.setdefault("prof_text_input", "")
-    ss.setdefault("route_name_input", "")
-    ss.setdefault("saved_choice", "")
-    ss.setdefault("open_target", "Navegador")
-    ss.setdefault("last_gmaps_url", None)
-    ss.setdefault("list_version", 0)       # <- fuerza refresco visual de la lista
-    ss.setdefault("ow_pending", None)      # <- nombre pendiente de sobrescritura
-    
-    # ----------------------------------------------------
-    # CORRECCIÓN DE PRIVACIDAD CRÍTICA
-    # Fuerza la recarga si el usuario cambia (o si la sesión se recicla)
-    # ----------------------------------------------------
-    current_username = ss.get('username')
-    
-    # Verifica si la lista de rutas NO ha sido cargada O si el usuario ha cambiado
-    if 'saved_routes' not in ss or \
-       ss.get('_current_routes_user') != current_username:
-           
-        ss["saved_routes"] = _load_routes_file()
-        ss['_current_routes_user'] = current_username # Marca que las rutas se cargaron para este usuario
-        ss["prof_points"] = [] # Limpiamos la ruta activa para evitar la mezcla inicial
-        ss["route_name_input"] = ""
-        ss["saved_choice"] = ""
 
 def _persist_routes_file():
     """Guarda las rutas en el archivo específico del usuario."""
@@ -268,7 +240,7 @@ def _save_load_col():
     st.subheader("Guardar / Cargar")
     st.text_input("Nombre para guardar", key="route_name_input", placeholder="p. ej. Lunes")
     
-    # CAMBIO: Añadimos on_change para cargar la ruta automáticamente al seleccionar
+    # Añadimos on_change para cargar la ruta automáticamente al seleccionar
     st.selectbox("Rutas guardadas",
                  options=[""] + sorted(st.session_state["saved_routes"].keys()),
                  key="saved_choice",
@@ -300,13 +272,13 @@ def _save_load_col():
 # ---------------------------
 def _build_and_show_outputs():
     ss = st.session_state
+    
+    # Preparamos o_text/d_text/w_texts
     pts = ss["prof_points"]
-    # Normaliza: quita vacíos/espacios
-    pts = [p for p in pts if isinstance(p,str) and p.strip()]
     if len(pts) < 2:
         st.warning("Añade origen y destino (mínimo 2 puntos).")
         return
-
+        
     o_text = pts[0]
     d_text = pts[-1]
     w_texts = pts[1:-1]
@@ -314,30 +286,31 @@ def _build_and_show_outputs():
     # Resolvemos todas las direcciones a meta-datos (incluyendo coordenadas)
     o_meta = resolve_selection(o_text, None)
     d_meta = resolve_selection(d_text, None)
-    waypoints_meta = [resolve_selection(w, None) for w in w_texts]
+
     # --- SANEAR waypoints: evitar que 'optimize:true' entre como punto ---
-    w_texts = [w for w in w_texts if not str(w).lower().startswith("optimize")]
-    waypoints_meta = [resolve_selection(w, None) for w in w_texts]
-    # --- FIN SANEADO ---
+    filtered_w_texts = []
+    for w in w_texts:
+        s = (w or "").strip()
+        if not s:
+            continue
+        low = s.lower()
+        # Ahora: descartamos solo el token exacto "optimize" o "optimize:true"
+        if low in ("optimize", "optimize:true"):
+            # entrada explícita de control -> descartamos
+            continue
+        filtered_w_texts.append(s)
 
-    # Pasamos los objetos meta a las funciones de construcción de URL
-    gmaps_web = build_gmaps_url(
-        origin_meta=o_meta,
-        destination_meta=d_meta,
-        waypoints_meta=waypoints_meta if waypoints_meta else None,
+    # Normalizamos a objetos meta antes de construir la URL
+    waypoints_meta = [resolve_selection(w, None) for w in filtered_w_texts]
+
+    # Generamos URLs
+    gmaps_url = build_gmaps_url(
+        origin_meta,
+        destination_meta,
+        waypoints_meta=waypoints_meta if waypoints_meta else None
     )
-    ss["last_gmaps_url"] = gmaps_web
+    ss["last_gmaps_url"] = gmaps_url
 
-    # --- RENDER ENLACE GOOGLE MAPS (siempre) ---
-    if gmaps_web:
-        st.link_button("Abrir en Google Maps", gmaps_web, use_container_width=True)
-        with st.expander("Ver URL"):
-            st.code(gmaps_web)
-    else:
-        st.warning("No se pudo generar la URL de Google Maps.")
-    # --- FIN RENDER ---
-
-    # Waze y Apple también usan el objeto meta
     waze = build_waze_url(o_meta, d_meta)
     apple = build_apple_maps_url(o_meta, d_meta)
 
@@ -345,9 +318,9 @@ def _build_and_show_outputs():
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.link_button("🗺️ Maps (Web)", gmaps_web, use_container_width=True)
+        st.link_button("🗺️ Maps (Web)", gmaps_url, use_container_width=True)
     with c2:
-        st.link_button("📱 Maps (App)", gmaps_web, use_container_width=True)
+        st.link_button("📱 Maps (App)", gmaps_url, use_container_width=True)
     with c3:
         st.link_button("🚗 Waze", waze, use_container_width=True)
     with c4:
@@ -364,13 +337,17 @@ def _build_and_show_outputs():
 # Entrada principal
 # ---------------------------
 def mostrar_profesional():
-    _init_state()
-
+    # El estado se inicializa fuera de esta función
+    
     st.header("🗺️ Planificador de Rutas")
     
-    # DEBUG: Muestra el nombre del archivo para confirmar que es único
-    st.sidebar.markdown("---")
-    st.sidebar.caption(f"Archivo de rutas: **{_get_user_routes_path().name}**")
+    # 3. Forzamos la recarga si el usuario cambia
+    if st.session_state.get('_current_routes_user') != st.session_state.get('username'):
+        st.session_state['_current_routes_user'] = st.session_state.get('username')
+        st.session_state["saved_routes"] = _load_routes_file()
+        st.session_state["prof_points"] = []
+        st.session_state["route_name_input"] = ""
+        st.session_state["saved_choice"] = ""
 
     # Modificado: Dos columnas principales (Izquierda=Controles, Derecha=Lista)
     col_controles, col_lista = st.columns([4, 8])

@@ -6,7 +6,7 @@ import googlemaps
 
 # ----------------- LECTURA DE CLAVES DE API -----------------
 load_dotenv()
-GMAPS_API_KEY = os.getenv("GOOGLE_API_KEY")
+GMAPS_API_KEY = os.getenv("GOOGLE_API_KEY") 
 
 # Inicialización del cliente de Google Maps
 @st.cache_resource
@@ -17,7 +17,6 @@ def get_gmaps_client():
         return None
     try:
         client = googlemaps.Client(key=key_to_use)
-        # comprobación opcional mínima
         client.geocode("Barcelona")
         return client
     except Exception:
@@ -30,12 +29,12 @@ GMAPS_CLIENT = get_gmaps_client()
 def geocode_address(query):
     if not GMAPS_CLIENT:
         return None
-
+    
     try:
         results = GMAPS_CLIENT.geocode(query)
         if results:
             location = results[0]['geometry']['location']
-            formatted_address = results[0].get('formatted_address', query)
+            formatted_address = results[0]['formatted_address']
             return {
                 "address": formatted_address,
                 "lat": location['lat'],
@@ -48,42 +47,32 @@ def geocode_address(query):
 def resolve_selection(label, meta=None):
     """Convierte la dirección a metadatos (coordenadas o texto)."""
     geo_data = geocode_address(label)
-
+    
     if geo_data:
         coords = f"{geo_data['lat']},{geo_data['lon']}"
         return {"address": geo_data['address'], "coords": coords}
-
+        
     return {"address": (label or "").strip(), "coords": (label or "").strip()}
 
 
 def _encode(s: str) -> str:
-    """Codifica la cadena para URL. Usamos quote con safe='' para que '|' se convierta en %7C."""
-    return urllib.parse.quote(str(s or ""), safe="")
+    """Codifica la cadena para URL."""
+    return urllib.parse.quote_plus(s or "")
 
 
 def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", avoid=None):
     """
-    Construye una URL para Google Maps Directions (web), codificando de forma segura.
-    Devuelve None si falta origin o destination.
+    Implementación FINAL de optimización que evita el punto fantasma.
     """
-    # obtener origen/destino (coords preferidas)
-    origin = origin_meta.get("coords") or origin_meta.get("address")
-    destination = destination_meta.get("coords") or destination_meta.get("address")
+    import urllib.parse
+    
+    origin = origin_meta.get("coords", origin_meta.get("address"))
+    destination = destination_meta.get("coords", destination_meta.get("address"))
 
-    if not origin or not destination:
-        return None
+    # Extraemos los waypoints en crudo (coords o address)
+    waypoints_for_url = [w.get("coords", w.get("address")) for w in (waypoints_meta or [])]
 
-    # normalizar waypoints: aceptamos lista de dicts {'address'/'coords'} o lista de strings
-    waypoints_for_url = []
-    for w in (waypoints_meta or []):
-        if isinstance(w, dict):
-            val = w.get("coords") or w.get("address")
-        else:
-            val = w
-        if val and str(val).strip():
-            waypoints_for_url.append(str(val).strip())
-
-    # Parámetros base en dict
+    # Parámetros base
     params = {
         "api": "1",
         "origin": origin,
@@ -98,31 +87,34 @@ def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="dr
             s = str(w).strip()
             if not s:
                 continue
-            # descartamos entradas que ya vengan como optimize:... desde la UI
-            if s.lower().startswith("optimize"):
+            # Descartamos solo el token EXACTO optimize / optimize:true
+            if s.lower() in ("optimize", "optimize:true"):
                 continue
             cleaned.append(s)
+            
         if cleaned:
-            # prefijamos 'optimize:true' (si quieres controlarlo desde UI, quítalo)
+            # Construcción de la cadena de waypoints
             waypoints_string = "optimize:true|" + "|".join(cleaned)
-            # guardamos sin encode; se codificará después con _encode (quote safe='')
             params["waypoints"] = waypoints_string
 
     if avoid:
         params["avoid"] = str(avoid)
 
-    # Codificamos cada valor con safe='' para asegurar %7C por '|' y no dejar caracteres problemáticos
+    # Codificamos cada valor de forma segura y construimos la URL
     encoded_parts = []
     for k, v in params.items():
-        encoded_parts.append(f"{k}={_encode(v)}")
+        # urllib.parse.quote con safe='' asegura que '|' se convierta en %7C
+        encoded_value = urllib.parse.quote(str(v), safe="")
+        encoded_parts.append(f"{k}={encoded_value}")
 
+    # Utilizamos la URL universal de Google Maps (sin el número de versión)
     return "https://www.google.com/maps/dir/?" + "&".join(encoded_parts)
 
 
 def build_waze_url(origin_meta, destination_meta):
     origin = origin_meta.get("address")
-    destination = destination_meta.get("address")  # FIX: usar destination_meta
-
+    destination = origin_meta.get("address")
+    
     if destination_meta.get("lat") and destination_meta.get("lon"):
         ll = f"{destination_meta['lat']},{destination_meta.get('lon')}"
         return (
@@ -130,24 +122,22 @@ def build_waze_url(origin_meta, destination_meta):
             f"?ll={_encode(ll)}"
             f"&navigate=yes&from_name={_encode(origin)}"
         )
-
+    
     return (
         "https://waze.com/ul"
         f"?q={_encode(destination)}"
         f"&navigate=yes&from_name={_encode(origin)}"
     )
 
-
 def build_apple_maps_url(origin_meta, destination_meta, waypoints=None):
     origin = origin_meta.get("address")
-    destination = destination_meta.get("address")  # FIX: usar destination_meta
+    destination = origin_meta.get("address")
     return (
         "https://maps.apple.com/"
         f"?saddr={_encode(origin)}"
         f"&daddr={_encode(destination)}"
         "&dirflg=d"
     )
-
 
 # Bandera de “API disponible”
 gmaps = bool(GMAPS_CLIENT)
