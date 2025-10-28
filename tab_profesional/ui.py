@@ -212,7 +212,7 @@ def _list_col():
             row = st.columns([9, 3]) 
             
             with row[0]:
-                # Añadimos una etiqueta para accesibilidad y evitar el Warning
+                # CORRECCIÓN DE ERROR: Añadimos una etiqueta para accesibilidad y evitar el Warning
                 st.text_input(
                     f"Punto {i+1}: {p}", # Etiqueta descriptiva para accesibilidad
                     value=p,
@@ -276,7 +276,7 @@ def _save_load_col():
 def _build_and_show_outputs():
     ss = st.session_state
     
-    # Inicialización de variables (para evitar NameError si el return se salta la inicialización)
+    # Inicialización de variables para EVITAR NameError (si el return se salta la inicialización)
     o_meta = None
     d_meta = None
 
@@ -284,7 +284,7 @@ def _build_and_show_outputs():
     pts = ss["prof_points"]
     if len(pts) < 2:
         st.warning("Añade origen y destino (mínimo 2 puntos).")
-        return # <-- CORREGIDO: El NameError se produce porque la función sigue después del warning.
+        return # <--- CORRECCIÓN CLAVE: Detener la ejecución aquí si hay menos de 2 puntos
         
     o_text = pts[0]
     d_text = pts[-1]
