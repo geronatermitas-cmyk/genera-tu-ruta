@@ -69,6 +69,7 @@ def _add_point(val: str):
         return
     ss["prof_points"].append(val)
     if "prof_text_input" in ss:
+        # CORRECCIÓN: Limpiamos la barra de búsqueda borrando la clave
         del ss["prof_text_input"]
     _bump_list_version()
     st.rerun()
@@ -211,7 +212,7 @@ def _list_col():
             row = st.columns([9, 3]) 
             
             with row[0]:
-                # CORRECCIÓN DE ERROR: Añadimos una etiqueta para accesibilidad y evitar el Warning
+                # Añadimos una etiqueta para accesibilidad y evitar el Warning
                 st.text_input(
                     f"Punto {i+1}: {p}", # Etiqueta descriptiva para accesibilidad
                     value=p,
@@ -275,11 +276,15 @@ def _save_load_col():
 def _build_and_show_outputs():
     ss = st.session_state
     
+    # Inicialización de variables (para evitar NameError si el return se salta la inicialización)
+    o_meta = None
+    d_meta = None
+
     # Preparamos o_text/d_text/w_texts
     pts = ss["prof_points"]
     if len(pts) < 2:
         st.warning("Añade origen y destino (mínimo 2 puntos).")
-        return # <--- CORRECCIÓN CLAVE: Detener la ejecución aquí si hay menos de 2 puntos
+        return # <-- CORREGIDO: El NameError se produce porque la función sigue después del warning.
         
     o_text = pts[0]
     d_text = pts[-1]
@@ -306,8 +311,8 @@ def _build_and_show_outputs():
 
     # Generamos URLs
     gmaps_url = build_gmaps_url(
-        origin_meta,
-        destination_meta,
+        o_meta,
+        d_meta,
         waypoints_meta=waypoints_meta if waypoints_meta else None
     )
     ss["last_gmaps_url"] = gmaps_url
