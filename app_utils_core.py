@@ -75,8 +75,7 @@ def _encode(s: str) -> str:
     """Codifica la cadena para URL usando quote_plus para espacios (por legibilidad en la URL)."""
     return urllib.parse.quote_plus(s or "")
 
-
-def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", avoid=None):
+def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", avoid=None, optimize=False):
     """
     Implementación CORREGIDA que resuelve el problema del 'punto fantasma' (?api=1).
     Usa la URL base correcta y codifica correctamente los parámetros.
@@ -112,10 +111,13 @@ def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="dr
                 continue
             cleaned.append(s)
             
+# CÁMBIALO POR ESTO (usando el nuevo parámetro 'optimize'):
         if cleaned:
             # Construcción de la cadena de waypoints
-            # La bandera 'optimize:true' DEBE ir como prefijo del parámetro waypoints.
-            waypoints_string = "optimize:true|" + "|".join(cleaned)
+            waypoints_string = "|".join(cleaned)
+            if optimize:
+                 # Añadimos la bandera SÓLO si el checkbox está marcado
+                 waypoints_string = "optimize:true|" + waypoints_string
             params["waypoints"] = waypoints_string
 
     if avoid:

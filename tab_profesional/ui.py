@@ -7,7 +7,7 @@ import streamlit as st
 import qrcode
 
 from app_utils_core import (
-    build_gmaps_url,         # firma sin "optimize"
+    build_gmaps_url,           # firma sin "optimize"
     build_waze_url,
     build_apple_maps_url,
     resolve_selection,
@@ -69,7 +69,7 @@ def _add_point(val: str):
         return
     ss["prof_points"].append(val)
     if "prof_text_input" in ss:
-        # CORRECCIÓN: Limpiamos la barra de búsqueda borrando la clave
+        # Limpiamos la barra de búsqueda borrando la clave
         del ss["prof_text_input"]
     _bump_list_version()
     st.rerun()
@@ -96,7 +96,8 @@ def _move_point_up(i: int):
 def _move_point_down(i: int):
     pts = st.session_state["prof_points"]
     if i < len(pts) - 1:
-        pts[i+1], pts[i] = pts[i], pts[i-1]
+        # CORRECCIÓN: el swap estaba incorrecto, debe ser i+1, i
+        pts[i+1], pts[i] = pts[i], pts[i+1]
         _bump_list_version()
     st.rerun()
 
@@ -160,8 +161,9 @@ def _load_route(name: str):
     # Aseguramos que solo guardamos y usamos STRINGS válidas
     cleaned_data = []
     for item in data:
+        # Convierte a string, elimina espacios y verifica que no esté vacío
         s = str(item).strip()
-        if s: # Solo añadimos si la string no está vacía
+        if s: 
             cleaned_data.append(s)
             
     ss["prof_points"] = cleaned_data
@@ -169,6 +171,7 @@ def _load_route(name: str):
     
     ss["route_name_input"] = name
     _bump_list_version()
+
 
 def _delete_saved_route(name: str):
     ss = st.session_state
@@ -205,6 +208,11 @@ def _search_col():
             key="prof_text_input",
             placeholder="p. ej. Passeig de Gràcia 1, Barcelona",
         )
+        st.checkbox(
+            "Optimizar ruta (visitar paradas en el orden más rápido)",
+            value=st.session_state.get('optimize_route', False),
+            key='optimize_route',
+        )
         submitted = st.form_submit_button("Añadir", type="primary", use_container_width=True)
     if submitted:
         _add_point(st.session_state.get("prof_text_input"))
@@ -212,22 +220,9 @@ def _search_col():
 
 def _list_col():
     ss = st.session_state
-    # ===================== DEBUG: inspección profunda de prof_points =====================
-    try:
-        pts_raw = ss.get("prof_points", [])
-        st.write("DEBUG: prof_points (raw):", pts_raw)
-        st.write("DEBUG: len(prof_points):", len(pts_raw))
-        # mostrar tipo y repr de cada elemento
-        types_list = [{"idx": i, "type": type(p).__name__, "repr": repr(p)} for i, p in enumerate(pts_raw)]
-        st.write("DEBUG: prof_points types:", types_list)
-        # revisar saved_routes en caso de que se cargaran rutas con formato distinto
-        st.write("DEBUG: saved_routes keys:", list(ss.get("saved_routes", {}).keys()))
-        # revisar last_gmaps_url por si algo concatena ahí
-        st.write("DEBUG: last_gmaps_url:", ss.get("last_gmaps_url"))
-    except Exception as e:
-        st.write("DEBUG: error inspeccion prof_points:", e)
-    # ====================================================================================
-
+    
+    # Hemos eliminado los logs DEBUG ya que el formato de los datos es correcto
+    
     st.subheader(f"Puntos ({len(ss.get('prof_points', []))}/{MAX_POINTS})  📌")
     pts: List[str] = ss.get("prof_points", [])
     if not pts:
@@ -239,10 +234,9 @@ def _list_col():
             row = st.columns([9, 3])  
             
             with row[0]:
-                # VALIDACIÓN CLAVE: Convertimos a string y manejamos None para evitar errores
                 st.text_input(
                     f"Punto {i+1}: {p}",
-                    value=str(p) if p is not None else "", # <--- CORRECCIÓN DE SEGURIDAD
+                    value=str(p) if p is not None else "",
                     key=f"pt_{ver}_{i}",
                     disabled=True,
                     label_visibility="collapsed",
@@ -263,16 +257,17 @@ def _list_col():
     # Limpiar debajo de la lista: Ahora usa el ancho completo.
     st.button("Limpiar ruta", on_click=_clear_points, use_container_width=True)
 
+
 def _save_load_col():
     st.subheader("Guardar / Cargar")
     st.text_input("Nombre para guardar", key="route_name_input", placeholder="p. ej. Lunes")
     
     # Añadimos on_change para cargar la ruta automáticamente al seleccionar
     st.selectbox("Rutas guardadas",
-                 options=[""] + sorted(st.session_state["saved_routes"].keys()),
-                 key="saved_choice",
-                 on_change=lambda: _load_route(st.session_state.get("saved_choice")) 
-                 )
+                  options=[""] + sorted(st.session_state["saved_routes"].keys()),
+                  key="saved_choice",
+                  on_change=lambda: _load_route(st.session_state.get("saved_choice"))  
+                  )
     
     # Quitamos el botón "Cargar" ya que la carga es automática
     c1, c2 = st.columns([1, 1])
@@ -300,7 +295,7 @@ def _save_load_col():
 def _build_and_show_outputs():
     ss = st.session_state
     
-    # Inicialización de variables para EVITAR NameError (si el return se salta la inicialización)
+    # Inicialización de variables para EVITAR NameError 
     o_meta = None
     d_meta = None
 
@@ -318,26 +313,20 @@ def _build_and_show_outputs():
     o_meta = resolve_selection(o_text, None)
     d_meta = resolve_selection(d_text, None)
 
-    # --- SANEAR waypoints: evitar que 'optimize:true' entre como punto ---
-    filtered_w_texts = []
-    for w in w_texts:
-        s = (w or "").strip()
-        if not s:
-            continue
-        low = s.lower()
-        # Ahora: descartamos solo el token exacto "optimize" o "optimize:true"
-        if low in ("optimize", "optimize:true"):
-            continue
-        filtered_w_texts.append(s)
-
+    # --- NO HAY SANEAR waypoints ya que el token 'optimize' se controla con el checkbox ---
+    
     # Normalizamos a objetos meta antes de construir la URL
-    waypoints_meta = [resolve_selection(w, None) for w in filtered_w_texts]
+    waypoints_meta = [resolve_selection(w, None) for w in w_texts]
 
+    # La bandera de optimización se pasa directamente desde la sesión
+    optimize_flag = ss.get('optimize_route', False)
+    
     # Generamos URLs
     gmaps_url = build_gmaps_url(
         o_meta,
         d_meta,
-        waypoints_meta=waypoints_meta if waypoints_meta else None
+        waypoints_meta=waypoints_meta if waypoints_meta else None,
+        optimize=optimize_flag # <--- NUEVO PARÁMETRO PARA CONTROLAR LA OPTIMIZACIÓN
     )
     ss["last_gmaps_url"] = gmaps_url
 
@@ -369,6 +358,10 @@ def _build_and_show_outputs():
 def mostrar_profesional():
     # El estado se inicializa fuera de esta función
     
+    # Aseguramos que la bandera de optimización existe al iniciar
+    if 'optimize_route' not in st.session_state:
+        st.session_state['optimize_route'] = False
+        
     st.header("🗺️ Planificador de Rutas")
     
     # 3. Forzamos la recarga si el usuario cambia
@@ -378,12 +371,13 @@ def mostrar_profesional():
         st.session_state["prof_points"] = []
         st.session_state["route_name_input"] = ""
         st.session_state["saved_choice"] = ""
-
+        st.session_state["optimize_route"] = False # Resetear bandera de optimización
+        
     # Modificado: Dos columnas principales (Izquierda=Controles, Derecha=Lista)
     col_controles, col_lista = st.columns([4, 8])
     
     with col_controles:
-        _search_col() # 1. Búsqueda
+        _search_col() # 1. Búsqueda y Checkbox de Optimización
         st.markdown("---")
         _save_load_col() # 2. Guardar / Cargar
         
