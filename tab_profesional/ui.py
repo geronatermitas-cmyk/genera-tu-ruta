@@ -155,10 +155,20 @@ def _load_route(name: str):
     data = ss["saved_routes"].get(name)
     if data is None:
         return
-    ss["prof_points"] = list(data)
+    
+    # === CORRECCIÓN DE LIMPIEZA ===
+    # Aseguramos que solo guardamos y usamos STRINGS válidas
+    cleaned_data = []
+    for item in data:
+        s = str(item).strip()
+        if s: # Solo añadimos si la string no está vacía
+            cleaned_data.append(s)
+            
+    ss["prof_points"] = cleaned_data
+    # ==============================
+    
     ss["route_name_input"] = name
     _bump_list_version()
-
 
 def _delete_saved_route(name: str):
     ss = st.session_state
