@@ -7,7 +7,7 @@ import streamlit as st
 import qrcode
 
 from app_utils_core import (
-    build_gmaps_url,
+    build_gmaps_url,         # firma sin "optimize"
     build_waze_url,
     build_apple_maps_url,
     resolve_selection,
@@ -21,10 +21,9 @@ MAX_POINTS = 10
 
 
 # ---------------------------
-# ESTADO - (LA FUNCIÓN _init_state HA SIDO ELIMINADA DE AQUÍ)
+# Estado
 # ---------------------------
-# Estas funciones dependen de la inicialización de estado que se hace en photo_agent_app.py
-
+# Nota: La inicialización de estado ahora se hace en photo_agent_app.py
 def _get_user_routes_path():
     """Devuelve el objeto Path del archivo de rutas del usuario logeado."""
     username = st.session_state.get('username', 'default')
@@ -212,12 +211,13 @@ def _list_col():
             row = st.columns([9, 3]) 
             
             with row[0]:
+                # CORRECCIÓN DE ERROR: Añadimos una etiqueta para accesibilidad y evitar el Warning
                 st.text_input(
-                    "",
+                    f"Punto {i+1}: {p}", # Etiqueta descriptiva para accesibilidad
                     value=p,
                     key=f"pt_{ver}_{i}",
                     disabled=True,
-                    label_visibility="collapsed",
+                    label_visibility="collapsed", # Ocultamos visualmente la etiqueta
                 )
             
             with row[1]:
