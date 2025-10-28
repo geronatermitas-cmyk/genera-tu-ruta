@@ -1,0 +1,7 @@
+streamlit
+googlemaps
+qrcode
+streamlit_searchbox
+streamlit-authenticator
+pyyaml
+python-dotenv
