@@ -1,4 +1,4 @@
-# photo_agent_app.py - Código con Inicialización de Estado Reforzada
+# photo_agent_app.py - Código con Inicialización de Estado Reforzada (FINAL)
 import streamlit as st
 import yaml
 from yaml.loader import SafeLoader
@@ -81,6 +81,16 @@ if not os.getenv("GOOGLE_API_KEY"):
 config = load_config()
 
 
+def init_session_state():
+    """Inicializa todas las claves de st.session_state de forma segura."""
+    st.session_state.setdefault('logged_in', False)
+    st.session_state.setdefault('show_register', False)
+    st.session_state.setdefault('username', None)
+    st.session_state.setdefault('name', None)
+
+# 💥 CORRECCIÓN CRÍTICA: Llamamos a la inicialización al inicio del script.
+init_session_state()
+
 # ----------------- LÓGICA DE LA APLICACIÓN -----------------
 
 DONATION_URL = "https://www.paypal.com/donate/?business=73LFHKS2WCQ9U&no_recurring=0&item_name=Ayuda+para+desarrolladores&currency_code=EUR"
@@ -99,17 +109,7 @@ def _import_ui():
 mostrar_profesional = _import_ui()
 
 
-def init_session_state():
-    """Inicializa todas las claves de st.session_state de forma segura."""
-    st.session_state.setdefault('logged_in', False)
-    st.session_state.setdefault('show_register', False)
-    st.session_state.setdefault('username', None)
-    st.session_state.setdefault('name', None)
-
-
 def main():
-    # 💥 CORRECCIÓN CRÍTICA: La primera cosa que Streamlit debe hacer es inicializar el estado.
-    init_session_state() 
     
     st.title("🗺️ Planificador de Rutas")
 
