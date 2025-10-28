@@ -1,4 +1,4 @@
-# photo_agent_app.py - Código Final Funcional
+# photo_agent_app.py - Código con Inicialización de Estado Reforzada
 import streamlit as st
 import yaml
 from yaml.loader import SafeLoader
@@ -35,12 +35,11 @@ def load_config():
         with open(CONFIG_FILE) as file:
             return yaml.load(file, Loader=SafeLoader)
     except FileNotFoundError:
-        # CORRECCIÓN: Devolvemos un diccionario de configuración completo con cookies iniciales.
         return {
             'credentials': {'usernames': {}}, 
             'cookie': {
                 'expiry_days': 30,
-                'key': hashlib.sha256(os.urandom(32)).hexdigest(), # Clave única de seguridad
+                'key': hashlib.sha256(os.urandom(32)).hexdigest(),
                 'name': 'auth_cookie'
             }
         }
@@ -60,7 +59,6 @@ def check_password(username, password_unhashed, config):
     if not user_data:
         return False
     
-    # Comparamos el hash almacenado con el hash de la contraseña introducida
     stored_hash = user_data['password_hash']
     input_hash = hash_password(password_unhashed)
     
@@ -68,26 +66,19 @@ def check_password(username, password_unhashed, config):
 
 def clear_route_state():
     """Función que borra las variables de ruta al cerrar sesión."""
-    for key in ["prof_points", "saved_routes", "route_name_input", "saved_choice", "_current_routes_user"]:
+    for key in ["prof_points", "saved_routes", "route_name_input", "saved_choice", "_current_routes_user", "logged_in", "username", "name"]:
         if key in st.session_state:
             del st.session_state[key]
 
 
-# Cargar variables de entorno para Geocodificación (solo para el warning)
+# Cargar variables de entorno para Geocodificación
 load_dotenv()
 if not os.getenv("GOOGLE_API_KEY"):
     st.sidebar.warning("⚠️ Clave API de Google no configurada. La Geocodificación será SIMULADA.")
-# Fin de chequeo de API
 
 
-# Cargar configuraciones
+# Cargar configuraciones (se mantiene fuera de main)
 config = load_config()
-
-# Inicialización de estado de Autenticación
-st.session_state.setdefault('logged_in', False)
-st.session_state.setdefault('show_register', False)
-st.session_state.setdefault('username', None)
-st.session_state.setdefault('name', None)
 
 
 # ----------------- LÓGICA DE LA APLICACIÓN -----------------
@@ -108,7 +99,18 @@ def _import_ui():
 mostrar_profesional = _import_ui()
 
 
+def init_session_state():
+    """Inicializa todas las claves de st.session_state de forma segura."""
+    st.session_state.setdefault('logged_in', False)
+    st.session_state.setdefault('show_register', False)
+    st.session_state.setdefault('username', None)
+    st.session_state.setdefault('name', None)
+
+
 def main():
+    # 💥 CORRECCIÓN CRÍTICA: La primera cosa que Streamlit debe hacer es inicializar el estado.
+    init_session_state() 
+    
     st.title("🗺️ Planificador de Rutas")
 
     if st.session_state['logged_in']:
@@ -173,7 +175,6 @@ def main():
                     submitted = st.form_submit_button("Registrarse")
 
                     if submitted:
-                        # CHEQUEO DE INTEGRIDAD FINAL
                         usernames = config['credentials']['usernames']
                         
                         if not all([new_username, new_email, new_name, new_password]):
@@ -181,20 +182,22 @@ def main():
                         elif new_username in usernames:
                             st.error("El nombre de usuario ya existe.")
                         else:
-                            # Guardar nuevo usuario
                             config['credentials']['usernames'][new_username] = {
                                 'email': new_email,
                                 'name': new_name,
                                 'password_hash': hash_password(new_password)
                             }
-                            # No necesitamos añadir la cookie aquí, ya que load_config la inicializa
+                            if 'key' not in config['cookie']:
+                                config['cookie']['key'] = hashlib.sha256(os.urandom(32)).hexdigest()
+                                config['cookie']['name'] = 'auth_cookie'
+                                config['cookie']['expiry_days'] = 30
                                 
                             save_config(config)
                             st.success('¡Registro exitoso! Ya puedes iniciar sesión.')
                             st.session_state['show_register'] = False
                             st.rerun()
 
-                if st.button("Volver al Login", key='back_to_to_login'):
+                if st.button("Volver al Login", key='back_to_login'):
                     st.session_state['show_register'] = False
                     st.rerun()
 
