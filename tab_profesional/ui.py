@@ -7,8 +7,13 @@ import streamlit as st
 import qrcode
 
 from app_utils_core import (
-    build_gmaps_url,           # firma sin "optimize"
-    build_waze_url,
+    # Nuevas funciones de URL que deben existir en app_utils_core.py
+    build_gmaps_web_url, 
+    build_gmaps_app_link_navigation, 
+    build_gmaps_android_intent_url, 
+    build_gmaps_ios_comgooglemaps,
+    # Funciones existentes
+    build_waze_url, 
     build_apple_maps_url,
     resolve_selection,
 )
@@ -292,6 +297,8 @@ def _save_load_col():
 # ---------------------------
 # Generar y salidas
 # ---------------------------
+
+
 def _build_and_show_outputs():
     ss = st.session_state
     
@@ -303,7 +310,7 @@ def _build_and_show_outputs():
     pts = ss["prof_points"]
     if len(pts) < 2:
         st.warning("Añade origen y destino (mínimo 2 puntos).")
-        return # <--- CORRECCIÓN CLAVE: Detener la ejecución aquí si hay menos de 2 puntos
+        return 
         
     o_text = pts[0]
     d_text = pts[-1]
@@ -312,45 +319,58 @@ def _build_and_show_outputs():
     # Resolvemos todas las direcciones a meta-datos (incluyendo coordenadas)
     o_meta = resolve_selection(o_text, None)
     d_meta = resolve_selection(d_text, None)
-
-    # --- NO HAY SANEAR waypoints ya que el token 'optimize' se controla con el checkbox ---
-    
-    # Normalizamos a objetos meta antes de construir la URL
     waypoints_meta = [resolve_selection(w, None) for w in w_texts]
 
     # La bandera de optimización se pasa directamente desde la sesión
     optimize_flag = ss.get('optimize_route', False)
     
-    # Generamos URLs
-    gmaps_url = build_gmaps_url(
-        o_meta,
-        d_meta,
-        waypoints_meta=waypoints_meta if waypoints_meta else None,
-        optimize=optimize_flag # <--- NUEVO PARÁMETRO PARA CONTROLAR LA OPTIMIZACIÓN
+    # === GENERACIÓN DE URLS MULTIPLES ===
+    # 1. Enlace Web (Estándar, funciona en todos los navegadores)
+    gmaps_web = build_gmaps_web_url(
+        o_meta, d_meta, waypoints_meta=waypoints_meta if waypoints_meta else None, optimize=optimize_flag
     )
-    ss["last_gmaps_url"] = gmaps_url
-
-    waze = build_waze_url(o_meta, d_meta)
-    apple = build_apple_maps_url(o_meta, d_meta)
+    # 2. Esquema de Navegación Directa (Abre app con intención de navegar - ideal para Android scheme)
+    gmaps_nav_scheme = build_gmaps_app_link_navigation(d_meta, o_meta) 
+    # 3. Android Intent (Mejor compatibilidad en navegadores Android)
+    gmaps_intent = build_gmaps_android_intent_url(
+        o_meta, d_meta, waypoints_meta=waypoints_meta if waypoints_meta else None, optimize=optimize_flag
+    )
+    # 4. Esquema iOS (Para Google Maps en iPhone/iPad)
+    gmaps_ios = build_gmaps_ios_comgooglemaps(o_meta, d_meta)
+    
+    # Guardamos el enlace web estándar para el QR
+    ss["last_gmaps_url"] = gmaps_web
 
     st.success("Ruta generada. Elige cómo abrirla 👇")
+    
+    # === RENDER DE BOTONES ===
+    
+    st.markdown("---")
+    st.markdown("**🗺️ Abrir en Google Maps**")
+    col_a, col_b, col_c = st.columns([2,2,2])
+    with col_a:
+        st.link_button("Maps (Web)", gmaps_web, use_container_width=True)
+    with col_b:
+        st.link_button("Maps (App • Android)", gmaps_intent, use_container_width=True)
+    with col_c:
+        st.link_button("Maps • Navegar (Scheme)", gmaps_nav_scheme, use_container_width=True)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.link_button("🗺️ Maps (Web)", gmaps_url, use_container_width=True)
-    with c2:
-        st.link_button("📱 Maps (App)", gmaps_url, use_container_width=True)
-    with c3:
-        st.link_button("🚗 Waze", waze, use_container_width=True)
-    with c4:
-        st.link_button("🍎 Apple", apple, use_container_width=True)
+    # Botón para iOS (separado por si el formato es distinto)
+    st.link_button("Maps (iOS • Google Maps)", gmaps_ios, use_container_width=True)
+
+    # Botones ya existentes para Waze y Apple Maps
+    waze = build_waze_url(o_meta, d_meta)
+    apple = build_apple_maps_url(o_meta, d_meta)
+    
+    st.markdown("---")
+    st.link_button("🚗 Waze", waze, use_container_width=True)
+    st.link_button("🍎 Apple Maps", apple, use_container_width=True)
 
     st.markdown("---")
-    st.caption("Escanea el QR (Google Maps)")
+    st.caption("Escanea el QR (Google Maps Web)")
     if ss["last_gmaps_url"]:
         img_buf = _qr_image_for(ss["last_gmaps_url"])
         st.image(img_buf, caption="QR", width=220)
-
 
 # ---------------------------
 # Entrada principal

@@ -70,75 +70,46 @@ def resolve_selection(label, meta=None):
     label_stripped = (label or "").strip()
     return {"address": label_stripped, "coords": label_stripped}
 
+# --- Añadir estas utilidades para deep links / intents ---
+def _encode_for_uri(s: str) -> str:
+    """Codifica la cadena para URL/URI."""
+    return urllib.parse.quote(str(s or ""), safe="")
 
-def _encode(s: str) -> str:
-    """Codifica la cadena para URL usando quote_plus para espacios (por legibilidad en la URL)."""
-    return urllib.parse.quote_plus(s or "")
-
-def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", avoid=None, optimize=False):
+def build_gmaps_web_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", avoid=None, optimize=False):
     """
-    Implementación CORREGIDA que resuelve el problema del 'punto fantasma' (?api=1).
-    Usa la URL base correcta y codifica correctamente los parámetros.
+    URL web (api=1) — preview en navegador / posibilidad de abrir app.
+    Incluye la lógica de optimización (optimize=true|...) si el flag está activo.
     """
-    
-    origin = origin_meta.get("coords", origin_meta.get("address"))
-    destination = destination_meta.get("coords", destination_meta.get("address"))
-
-    # Extraemos los waypoints en crudo (coords o address)
-    waypoints_for_url = [w.get("coords", w.get("address")) for w in (waypoints_meta or [])]
-
-    # Parámetros base
-    # La API web de Google Maps para direcciones USA 'dir' (o 'd') pero con 'dir/...'
-    # Usaremos el formato estándar de directions API (daddr, saddr) o el simple (origin, destination)
-    # y nos aseguraremos de que no haya una '?' en el valor.
+    origin = origin_meta.get("coords") or origin_meta.get("address")
+    destination = destination_meta.get("coords") or destination_meta.get("address")
     params = {
-        # 'api': '1' se añade al final y no como parte de un parámetro
+        "api": "1",
         "origin": origin,
         "destination": destination,
-        "travelmode": mode,
+        "travelmode": mode
     }
-
-    # Waypoints: agregar si existen después de filtrar entradas que contengan optimize:...
-    if waypoints_for_url:
-        cleaned = []
-        for w in waypoints_for_url:
-            s = str(w).strip()
-            if not s:
-                continue
-            low = s.lower()
-            # Descartamos solo el token EXACTO optimize / optimize:true
-            if low in ("optimize", "optimize:true"):
-                continue
-            cleaned.append(s)
-            
-# CÁMBIALO POR ESTO (usando el nuevo parámetro 'optimize'):
-        if cleaned:
-            # Construcción de la cadena de waypoints
-            waypoints_string = "|".join(cleaned)
+    
+    # Waypoints
+    if waypoints_meta:
+        pts = []
+        for w in waypoints_meta:
+            # Asumiendo que w es un diccionario de metadatos (el resultado de resolve_selection)
+            val = w.get("coords") if isinstance(w, dict) else w
+            if val and not str(val).strip().lower() in ("optimize","optimize:true"):
+                pts.append(str(val).strip())
+        
+        if pts:
+            wp = "|".join(pts)
+            # Añadir la bandera de optimización SÓLO si el checkbox estaba marcado
             if optimize:
-                 # Añadimos la bandera SÓLO si el checkbox está marcado
-                 waypoints_string = "optimize:true|" + waypoints_string
-            params["waypoints"] = waypoints_string
-
-    if avoid:
-        params["avoid"] = str(avoid)
-
-    # 1. Codificamos cada valor de forma segura.
-    encoded_parts = []
-    for k, v in params.items():
-        # urllib.parse.quote con safe='' asegura que '|' se convierta en %7C
-        # y no codifica el coma ',' que es necesario en las coordenadas.
-        # quote_plus codifica el espacio como '+' (lo cual es normal para query strings)
-        encoded_value = urllib.parse.quote(str(v), safe=":,") 
-        encoded_parts.append(f"{k}={encoded_value}")
-
-    # 2. Añadimos el parámetro 'api=1' después de todos los demás.
-    encoded_parts.append("api=1")
-
-    # 3. Reemplazamos la URL base INCORRECTA con la estándar.
-    # Usamos maps.google.com/maps para el enlace web directo
-    return "https://www.google.com/maps/dir/?" + "&".join(encoded_parts)
-
+                 wp = "optimize:true|" + wp
+                 
+            params["waypoints"] = wp
+            
+    # codificar
+    parts = [f"{k}={_encode_for_uri(v)}" for k, v in params.items()]
+    # Usamos /dir/ para forzar la navegación
+    return "https://www.google.com/maps/dir/?" + "&".join(parts)
 
 def build_waze_url(origin_meta, destination_meta):
     # CORRECCIÓN: Obtener la dirección del destino de los metadatos correctos
@@ -175,6 +146,83 @@ def build_apple_maps_url(origin_meta, destination_meta, waypoints=None):
         f"?saddr={_encode(origin)}"
         f"&daddr={_encode(destination)}"
         "&dirflg=d" # Indica conducción
+    )
+# ==============================================================================
+# NUEVAS FUNCIONES DE DEEP LINK 
+# ==============================================================================
+
+def build_gmaps_app_link_navigation(destination_meta, origin_meta=None, mode="d"):
+    """Genera un esquema de navegación directa 'google.navigation:' (ideal para Android)."""
+    dest = destination_meta.get("coords") or destination_meta.get("address")
+    
+    if not dest:
+        return "https://google.com/maps"
+
+    # google.navigation acepta q=dest (coords o text)
+    q = _encode_for_uri(dest)
+    nav_url = f"google.navigation:q={q}&mode={mode}"
+    return nav_url
+
+
+def build_gmaps_android_intent_url(origin_meta, destination_meta, waypoints_meta=None, mode="driving", optimize=False):
+    """
+    Construye un intent:// URL para Android que intenta abrir la app de Google Maps.
+    """
+    # Usamos build_gmaps_web_url para obtener la URL base con todos los parámetros (waypoints/optimización)
+    web_url = build_gmaps_web_url(origin_meta, destination_meta, waypoints_meta, mode=mode, optimize=optimize)
+    
+    # Intent que abre la URL en la app com.google.android.apps.maps
+    # Nota: la parte web_url.split('//')[-1] es CRÍTICA para que funcione en Android
+    return (
+        f"intent://{web_url.split('//')[-1]}"  # Quita el http(s)://
+        f"#Intent;scheme=https;package=com.google.android.apps.maps;action=VIEW;S.browser_fallback_url={_encode_for_uri(web_url)};end"
+    )
+
+def build_gmaps_ios_comgooglemaps(origin_meta, destination_meta, mode="driving"):
+    """
+    Link para iOS abriendo Google Maps app si está instalada (comgooglemaps://).
+    Nota: Este esquema NO soporta waypoints ni optimización. Solo Origen y Destino.
+    """
+    saddr = origin_meta.get("coords") or origin_meta.get("address") if origin_meta else ""
+    daddr = destination_meta.get("coords") or destination_meta.get("address")
+    params = []
+    if saddr:
+        params.append(f"saddr={_encode_for_uri(saddr)}")
+    if daddr:
+        params.append(f"daddr={_encode_for_uri(daddr)}")
+    params.append(f"directionsmode={_encode_for_uri(mode)}")
+    return "comgooglemaps://?" + "&".join(params)
+
+# Funciones de Waze y Apple Maps (mantener)
+def build_waze_url(origin_meta, destination_meta):
+    origin = origin_meta.get("address")
+    
+    dest_lat = destination_meta.get("lat")
+    dest_lon = destination_meta.get("lon")
+    destination_address = destination_meta.get("address")
+    
+    if dest_lat and dest_lon:
+        ll = f"{dest_lat},{dest_lon}"
+        return (
+            "https://waze.com/ul"
+            f"?ll={_encode_for_uri(ll)}"
+            f"&navigate=yes&from_name={_encode_for_uri(origin)}"
+        )
+    
+    return (
+        "https://waze.com/ul"
+        f"?q={_encode_for_uri(destination_address)}"
+        f"&navigate=yes&from_name={_encode_for_uri(origin)}"
+    )
+
+def build_apple_maps_url(origin_meta, destination_meta, waypoints=None):
+    origin = origin_meta.get("address")
+    destination = destination_meta.get("address")
+    return (
+        "https://maps.apple.com/"
+        f"?saddr={_encode_for_uri(origin)}"
+        f"&daddr={_encode_for_uri(destination)}"
+        "&dirflg=d"
     )
 
 # Bandera de “API disponible”
