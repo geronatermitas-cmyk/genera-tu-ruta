@@ -201,29 +201,45 @@ def _search_col():
 
 
 def _list_col():
-    st.subheader(f"Puntos ({len(st.session_state['prof_points'])}/{MAX_POINTS})  📌")
-    pts: List[str] = st.session_state["prof_points"]
+    ss = st.session_state
+    # ===================== DEBUG: inspección profunda de prof_points =====================
+    try:
+        pts_raw = ss.get("prof_points", [])
+        st.write("DEBUG: prof_points (raw):", pts_raw)
+        st.write("DEBUG: len(prof_points):", len(pts_raw))
+        # mostrar tipo y repr de cada elemento
+        types_list = [{"idx": i, "type": type(p).__name__, "repr": repr(p)} for i, p in enumerate(pts_raw)]
+        st.write("DEBUG: prof_points types:", types_list)
+        # revisar saved_routes en caso de que se cargaran rutas con formato distinto
+        st.write("DEBUG: saved_routes keys:", list(ss.get("saved_routes", {}).keys()))
+        # revisar last_gmaps_url por si algo concatena ahí
+        st.write("DEBUG: last_gmaps_url:", ss.get("last_gmaps_url"))
+    except Exception as e:
+        st.write("DEBUG: error inspeccion prof_points:", e)
+    # ====================================================================================
+
+    st.subheader(f"Puntos ({len(ss.get('prof_points', []))}/{MAX_POINTS})  📌")
+    pts: List[str] = ss.get("prof_points", [])
     if not pts:
         st.info("Añade al menos dos puntos (origen y destino).")
     else:
-        ver = st.session_state["list_version"]
+        ver = ss.get("list_version", 0)
         for i, p in enumerate(pts):
             # Usamos las columnas solo para la fila de cada punto
-            row = st.columns([9, 3]) 
+            row = st.columns([9, 3])  
             
             with row[0]:
-                # CORRECCIÓN DE ERROR: Añadimos una etiqueta para accesibilidad y evitar el Warning
+                # VALIDACIÓN CLAVE: Convertimos a string y manejamos None para evitar errores
                 st.text_input(
-                    f"Punto {i+1}: {p}", # Etiqueta descriptiva para accesibilidad
-                    value=p,
+                    f"Punto {i+1}: {p}",
+                    value=str(p) if p is not None else "", # <--- CORRECCIÓN DE SEGURIDAD
                     key=f"pt_{ver}_{i}",
                     disabled=True,
-                    label_visibility="collapsed", # Ocultamos visualmente la etiqueta
+                    label_visibility="collapsed",
                 )
             
             with row[1]:
-                # Usamos una sub-columna para los 3 botones, haciéndolos más anchos
-                col_btn = st.columns(3) 
+                col_btn = st.columns(3)  
                 
                 with col_btn[0]:
                     st.button("✖", key=f"del_{ver}_{i}", on_click=_delete_point, args=(i,), use_container_width=True)
@@ -234,10 +250,8 @@ def _list_col():
                     st.button("▼", key=f"dn_{ver}_{i}", on_click=_move_point_down, args=(i,), use_container_width=True,
                               disabled=(i==len(pts)-1))
 
-
     # Limpiar debajo de la lista: Ahora usa el ancho completo.
     st.button("Limpiar ruta", on_click=_clear_points, use_container_width=True)
-
 
 def _save_load_col():
     st.subheader("Guardar / Cargar")
