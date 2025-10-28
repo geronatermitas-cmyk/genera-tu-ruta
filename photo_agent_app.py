@@ -1,4 +1,4 @@
-# photo_agent_app.py - Código Final Funcional (Corrección Final de Inicialización)
+# photo_agent_app.py - Código Final Funcional (Corrección del Error de Atributo)
 import streamlit as st
 import yaml
 from yaml.loader import SafeLoader
@@ -95,11 +95,13 @@ DONATION_URL = "https://www.paypal.com/donate/?business=73LFHKS2WCQ9U&no_recurri
 def _import_ui():
     """Importa la UI y su inicialización de estado de forma robusta."""
     try:
-        from tab_profesional.ui import mostrar_profesional, _init_state
+        # CAMBIO CRÍTICO: Importar _init_state directamente desde el módulo tab_profesional.ui
+        from tab_profesional.ui import mostrar_profesional, _init_state 
         return mostrar_profesional, _init_state
     except Exception:
         import importlib
         mod = importlib.import_module("tab_profesional.ui")
+        # Esto solo funcionará si _init_state existe
         return getattr(mod, "mostrar_profesional"), getattr(mod, "_init_state")
 
 
