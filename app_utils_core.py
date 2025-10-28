@@ -83,7 +83,7 @@ def build_gmaps_url(origin_meta, destination_meta, waypoints_meta=None, mode="dr
         encoded_waypoints_list = [_encode(w.strip()) for w in waypoints_for_url if (w or "").strip()]
         
         # Unimos con '|' y añadimos el prefijo de optimización
-        waypoints_string = "optimize:true|" + "|".join(encoded_waypoints_list)
+        waypoints_string = "optimize:false|" + "|".join(encoded_waypoints_list)
         
         # El comando 'url_parts.append' solo añade la cadena, no hay doble codificación.
         # Reemplazamos los '|' por %7C
