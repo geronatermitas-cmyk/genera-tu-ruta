@@ -64,23 +64,7 @@ def _bump_list_version():
 # ---------------------------
 # Acciones lista
 # ---------------------------
-def _add_point(val: str):
-    ss = st.session_state
-    val = (val or "").strip()
-    if not val:
-        return
-    if len(ss["prof_points"]) >= MAX_POINTS:
-        st.warning(f"Límite de {MAX_POINTS} puntos.")
-        return
-    ss["prof_points"].append(val)
-    
-    # === CORRECCIÓN: LIMPIAR EL INPUT ===
-    if "prof_text_input" in ss:
-        del ss["prof_text_input"]
-    # ==================================
-    
-    _bump_list_version()
-    st.rerun()
+$(cat tab_profesional/ui_add_point.temp)
 
 def _clear_points():
     ss = st.session_state
@@ -225,41 +209,7 @@ def _search_col():
         _add_point(st.session_state.get("prof_text_input"))
 
 
-def _list_col():
-    ss = st.session_state
-    
-    # Hemos eliminado los logs DEBUG ya que el formato de los datos es correcto
-    
-    st.subheader(f"Puntos ({len(ss.get('prof_points', []))}/{MAX_POINTS})  📌")
-    pts: List[str] = ss.get("prof_points", [])
-    if not pts:
-        st.info("Añade al menos dos puntos (origen y destino).")
-    else:
-        ver = ss.get("list_version", 0)
-        for i, p in enumerate(pts):
-            # Usamos las columnas solo para la fila de cada punto
-            row = st.columns([9, 3])  
-            
-            with row[0]:
-                st.text_input(
-                    f"Punto {i+1}: {p}",
-                    value=str(p) if p is not None else "",
-                    key=f"pt_{ver}_{i}",
-                    disabled=True,
-                    label_visibility="collapsed",
-                )
-            
-            with row[1]:
-                col_btn = st.columns(3)  
-                
-                with col_btn[0]:
-                    st.button("✖", key=f"del_{ver}_{i}", on_click=_delete_point, args=(i,), use_container_width=True)
-                with col_btn[1]:
-                    st.button("▲", key=f"up_{ver}_{i}", on_click=_move_point_up, args=(i,), use_container_width=True,
-                              disabled=(i==0))
-                with col_btn[2]:
-                    st.button("▼", key=f"dn_{ver}_{i}", on_click=_move_point_down, args=(i,), use_container_width=True,
-                              disabled=(i==len(pts)-1))
+$(cat tab_profesional/ui_list_col.temp)
 
     # Limpiar debajo de la lista: Ahora usa el ancho completo.
     st.button("Limpiar ruta", on_click=_clear_points, use_container_width=True)
@@ -365,35 +315,3 @@ def _build_and_show_outputs():
 
 
 
-def mostrar_profesional():
-    # El estado se inicializa fuera de esta función
-    
-    # Aseguramos que la bandera de optimización existe al iniciar
-    if 'optimize_route' not in st.session_state:
-        st.session_state['optimize_route'] = False
-        
-    st.header("🗺️ Planificador de Rutas")
-    
-    # 3. Forzamos la recarga si el usuario cambia
-    if st.session_state.get('_current_routes_user') != st.session_state.get('username'):
-        st.session_state['_current_routes_user'] = st.session_state.get('username')
-        st.session_state["saved_routes"] = _load_routes_file()
-        st.session_state["prof_points"] = []
-        st.session_state["route_name_input"] = ""
-        st.session_state["saved_choice"] = ""
-        st.session_state["optimize_route"] = False # Resetear bandera de optimización
-        
-    # Modificado: Dos columnas principales (Izquierda=Controles, Derecha=Lista)
-    col_controles, col_lista = st.columns([4, 8])
-    
-    with col_controles:
-        _search_col() # 1. Búsqueda y Checkbox de Optimización
-        st.markdown("---")
-        _save_load_col() # 2. Guardar / Cargar
-        
-    with col_lista:
-        _list_col() # 3. La lista de puntos
-
-    st.markdown("---")
-    if st.button("Generar ruta profesional", type="primary", use_container_width=True):
-        _build_and_show_outputs()
