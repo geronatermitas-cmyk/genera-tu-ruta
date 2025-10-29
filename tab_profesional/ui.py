@@ -392,9 +392,22 @@ def mostrar_profesional():
     with col_exp:
         st.subheader("Exportar a Mapas")
         if ss.get("last_gmaps_url"):
+            # === CORRECCIÓN CLAVE: Resolver metadatos ANTES de llamar a build_waze_url ===
+            
+            # Asegurarse de que la lista tiene al menos dos puntos
+            if len(ss["prof_points"]) >= 2:
+                o_meta = resolve_selection(ss["prof_points"][0], None)
+                d_meta = resolve_selection(ss["prof_points"][-1], None)
+
+                # Generación de URLs con metadatos (dicts)
+                waze_url = build_waze_url(o_meta, d_meta)
+                apple_url = build_apple_maps_url(o_meta, d_meta)
+            else:
+                # Fallback si no hay suficientes puntos
+                waze_url = "#"
+                apple_url = "#"
+
             gmaps_url = ss["last_gmaps_url"]
-            waze_url = build_waze_url(ss["prof_points"][0], ss["prof_points"][-1])
-            apple_url = build_apple_maps_url(ss["prof_points"][0], ss["prof_points"][-1])
             
             st.link_button("Abrir en Google Maps", gmaps_url, type="primary", use_container_width=True)
             st.link_button("Abrir en Waze", waze_url, use_container_width=True)
