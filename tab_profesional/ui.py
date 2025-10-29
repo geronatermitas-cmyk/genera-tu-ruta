@@ -195,7 +195,6 @@ def _qr_image_for(url: str):
     buf.seek(0)
     return buf
 
-
 # ---------------------------
 # Componentes de diseño (Estilo Retool)
 # ---------------------------
@@ -417,7 +416,14 @@ def mostrar_profesional():
             st.link_button("Abrir en Google Maps", gmaps_url, type="primary", use_container_width=True)
             st.link_button("Abrir en Waze", waze_url, use_container_width=True)
             st.link_button("Copiar enlace", gmaps_url, help="Copiar URL al portapapeles", use_container_width=True)
-
+# ... (TUS BOTONES DE ENLACE TERMINAN AQUÍ)
+            
+            # === CÓDIGO A AÑADIR (PARA EL QR) ===
+            st.markdown("---")
+            st.caption("Escanea el QR (Google Maps)")
+            img_buf = _qr_image_for(gmaps_url) # Llamada a la función que crea la imagen
+            st.image(img_buf, caption="QR", width=150) # Renderiza la imagen
+            # ====================================
     with col_met:
         st.subheader("Optimización y Métricas")
         
