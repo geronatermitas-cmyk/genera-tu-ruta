@@ -7,15 +7,10 @@ import streamlit as st
 import qrcode
 
 from app_utils_core import (
-    # Solo necesitamos web, waze, apple.
     build_gmaps_web_url, 
     build_waze_url, 
     build_apple_maps_url,
     resolve_selection,
-    # Comentar o eliminar las líneas de deep-link si ya no están en app_utils_core.py
-    # build_gmaps_app_link_navigation, 
-    # build_gmaps_android_intent_url, 
-    # build_gmaps_ios_comgooglemaps,
 )
 
 # Definición base para la carpeta de rutas
@@ -103,7 +98,6 @@ def _move_point_up(i: int):
 def _move_point_down(i: int):
     pts = st.session_state["prof_points"]
     if i < len(pts) - 1:
-        # CORRECCIÓN: el swap estaba incorrecto, debe ser i+1, i
         pts[i+1], pts[i] = pts[i], pts[i+1]
         _bump_list_version()
     st.rerun()
@@ -262,7 +256,38 @@ def _list_col():
                               disabled=(i==len(pts)-1))
 
 
-$(cat tab_profesional/ui_save_load_col.temp)
+def _save_load_col():
+    ss = st.session_state
+    
+    # Campo de NOMBRE para guardar o SOBREESCRIBIR
+    st.text_input("Nombre de ruta", key="route_name_input", placeholder="Ej. Reparto Lunes mañana")
+    
+    # Campo para SELECCIONAR/CARGAR una ruta ya guardada
+    # Usamos st.selectbox para mostrar las rutas guardadas (la carga es automatica con on_change)
+    st.selectbox(
+        "Rutas guardadas",
+        options=[""] + sorted(ss["saved_routes"].keys()),
+        key="saved_choice",
+        on_change=lambda: _load_route(ss.get("saved_choice"))
+    )
+    
+    # Botones principales
+    c1, c2, c3 = st.columns(3)
+    with c1: st.button("Guardar/Crear", on_click=_save_current_route, use_container_width=True)
+    with c2: st.button("Guardar Cambios", on_click=_save_current_route, use_container_width=True)
+    with c3: st.button("Eliminar ruta", 
+                       on_click=lambda: _delete_saved_route(ss.get("saved_choice")), 
+                       use_container_width=True,
+                       disabled=not ss.get("saved_choice"))
+                       
+    # Aviso de sobrescritura (si aplica)
+    if ss.get("ow_pending"):
+        st.warning(f"La ruta «{ss['ow_pending']}» ya existe. ¿Sobrescribir?")
+        cA, cB = st.columns(2)
+        with cA:
+            st.button("✅ Sí, sobrescribir", on_click=_confirm_overwrite, args=(True,), use_container_width=True)
+        with cB:
+            st.button("❌ Cancelar", on_click=_confirm_overwrite, args=(False,), use_container_width=True)
 
 
 # ---------------------------
@@ -290,17 +315,21 @@ def _build_and_show_outputs():
 
     optimize_flag = ss.get('optimize_route', False)
     
-    # === GENERACIÓN DE URLS ===
-    # Usamos la URL web estándar que el móvil puede interceptar.
-    
-    gmaps_web = build_gmaps_web_url(
-        o_meta, d_meta, 
-        waypoints_meta=waypoints_meta if waypoints_meta else None, 
-        optimize=optimize_flag
-    )
-    
-    ss["last_gmaps_url"] = gmaps_web
-    
+    try:
+        # === Generación de URLs ===
+        gmaps_web = build_gmaps_web_url(
+            o_meta, d_meta, 
+            waypoints_meta=waypoints_meta if waypoints_meta else None, 
+            optimize=optimize_flag
+        )
+        ss["last_gmaps_url"] = gmaps_web
+        
+    except Exception as e:
+        # Captura errores de la API de geocodificación si la clave falla
+        st.error("❌ Error al generar la URL. Verifica las direcciones y la clave API de Google.")
+        print(f"Error completo de API: {e}")
+        ss["last_gmaps_url"] = None
+        
     # Actualiza el estado de la aplicación para que se rendericen las métricas
     st.rerun()
 
@@ -308,4 +337,96 @@ def _build_and_show_outputs():
 # ---------------------------
 # Entrada principal
 # ---------------------------
-$(cat tab_profesional/ui_mostrar_profesional.temp)
+def mostrar_profesional():
+    ss = st.session_state
+    
+    # Aseguramos que la bandera de optimización existe al iniciar
+    if 'optimize_route' not in st.session_state:
+        st.session_state['optimize_route'] = False
+        
+    # 1. HEADER (Título - simulación)
+    st.title("Gestor de Rutas")
+    
+    # 2. Forzamos la recarga si el usuario cambia
+    if st.session_state.get('_current_routes_user') != st.session_state.get('username'):
+        st.session_state['_current_routes_user'] = st.session_state.get('username')
+        st.session_state["saved_routes"] = _load_routes_file()
+        st.session_state["prof_points"] = []
+        st.session_state["route_name_input"] = ""
+        st.session_state["saved_choice"] = ""
+        st.session_state["optimize_route"] = False # Resetear bandera de optimización
+        
+    # ====================================================================
+    # ESTRUCTURA PRINCIPAL (COLUMNAS IZQUIERDA/DERECHA)
+    # ====================================================================
+    
+    col_izq, col_der = st.columns([4, 6])
+    
+    with col_izq:
+        # A. TARJETA AGREGAR DIRECCIÓN
+        with st.container(border=True):
+            _add_direction_container() 
+            
+        st.markdown("---")
+        
+        # B. TARJETA GESTIÓN DE RUTAS (Guardar / Cargar)
+        with st.container(border=True):
+            st.subheader("Gestión de Rutas")
+            _save_load_col() # Usa la función para gestión de rutas
+
+    with col_der:
+        # C. TARJETA DIRECCIONES DE LA RUTA
+        with st.container(border=True):
+            col_list_header, col_list_clean = st.columns([8, 2])
+            with col_list_header:
+                st.subheader("Direcciones de la ruta")
+            with col_list_clean:
+                st.button("Limpiar", on_click=_clear_points, use_container_width=True, help="Limpiar todos los puntos")
+                
+            _list_col() # Usa la lista limpia sin subtítulos
+
+    st.markdown("---") 
+
+    # D. SECCIÓN INFERIOR: EXPORTAR Y OPTIMIZACIÓN/MÉTRICAS (Al pie de página)
+    
+    # Botón principal para generar la ruta que estaba abajo
+    if st.button("Generar Ruta y Exportar", type="primary", use_container_width=True):
+        _build_and_show_outputs()
+        
+    st.markdown("---")
+        
+    col_exp, col_met = st.columns([4, 8])
+    
+    with col_exp:
+        st.subheader("Exportar a Mapas")
+        if ss.get("last_gmaps_url"):
+            gmaps_url = ss["last_gmaps_url"]
+            
+            # === Generación de URLs para Waze/Apple Maps (Corrección de tipo de dato) ===
+            # Verificamos que haya suficientes puntos para evitar errores en build_waze_url
+            if len(ss["prof_points"]) >= 2:
+                o_meta = resolve_selection(ss["prof_points"][0], None)
+                d_meta = resolve_selection(ss["prof_points"][-1], None)
+                waze_url = build_waze_url(o_meta, d_meta)
+                apple_url = build_apple_maps_url(o_meta, d_meta)
+            else:
+                waze_url = "#"
+                apple_url = "#"
+            # ====================================================================
+
+            st.link_button("Abrir en Google Maps", gmaps_url, type="primary", use_container_width=True)
+            st.link_button("Abrir en Waze", waze_url, use_container_width=True)
+            st.link_button("Copiar enlace", gmaps_url, help="Copiar URL al portapapeles", use_container_width=True)
+
+    with col_met:
+        st.subheader("Optimización y Métricas")
+        
+        if ss.get("last_gmaps_url"):
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.markdown("Modo de optimización")
+                st.selectbox("Modo", options=["Ruta optimizada" if ss.get('optimize_route') else "Original"], label_visibility="collapsed")
+            with col_m2:
+                st.metric("Distancia Total", "XX km")
+            with col_m3:
+                st.metric("Tiempo Estimado", "YY min")
