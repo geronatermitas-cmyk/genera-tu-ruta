@@ -68,10 +68,10 @@ def _add_point(val: str):
         return
     ss["prof_points"].append(val)
     
-    # === CORRECCIÓN: LIMPIAR EL INPUT ===
+    # === CORRECCIÓN 1: LIMPIAR EL INPUT DE BÚSQUEDA ===
     if "prof_text_input" in ss:
         del ss["prof_text_input"]
-    # ==================================
+    # ==================================================
     
     _bump_list_version()
     st.rerun()
@@ -134,6 +134,11 @@ def _save_current_route():
     ss["saved_choice"] = name
     ss["ow_pending"] = None
     st.success("Ruta guardada ✅")
+    
+    # === CORRECCIÓN 3: LIMPIAR CAMPO DE RUTA GUARDADA DESPUÉS DE GUARDAR ===
+    if "route_name_input" in ss:
+        del ss["route_name_input"]
+    st.rerun()
 
 
 def _confirm_overwrite(ok: bool):
@@ -168,8 +173,14 @@ def _load_route(name: str):
     ss["prof_points"] = cleaned_data
     # ==============================
     
-    ss["route_name_input"] = name
+    # ss["route_name_input"] = name # No restauramos el input de texto para que el usuario pueda guardarla con otro nombre
+    
+    # === CORRECCIÓN 3: LIMPIAR SELECCIÓN DE RUTA GUARDADA ===
+    # Ya que la carga es inmediata con on_change, dejamos que el selectbox se actualice
+    # pero no lo forzamos a vacío a menos que se elimine.
+    
     _bump_list_version()
+    st.rerun()
 
 
 def _delete_saved_route(name: str):
@@ -177,7 +188,7 @@ def _delete_saved_route(name: str):
     if name and name in ss["saved_routes"]:
         del ss["saved_routes"][name]
         _persist_routes_file()
-        ss["saved_choice"] = ""
+        ss["saved_choice"] = "" # Limpiamos el selectbox
         st.success("Ruta borrada 🗑️")
         st.rerun()
 
@@ -185,7 +196,19 @@ def _delete_saved_route(name: str):
 # ---------------------------
 # QR helper
 # ---------------------------
-$(cat tab_profesional/ui_qr_helper.temp)
+# === CORRECCIÓN 2: Código QR para Streamlit ===
+def _qr_image_for(url: str):
+    # Asegúrate de que qrcode, io están importados
+    qr = qrcode.QRCode(version=2, box_size=8, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+# ===========================================
+
 
 # ---------------------------
 # Componentes de diseño (Estilo Retool)
@@ -254,7 +277,6 @@ def _save_load_col():
     st.text_input("Nombre de ruta", key="route_name_input", placeholder="Ej. Reparto Lunes mañana")
     
     # Campo para SELECCIONAR/CARGAR una ruta ya guardada
-    # Usamos st.selectbox para mostrar las rutas guardadas (la carga es automatica con on_change)
     st.selectbox(
         "Rutas guardadas",
         options=[""] + sorted(ss["saved_routes"].keys()),
@@ -272,7 +294,7 @@ def _save_load_col():
                        disabled=not ss.get("saved_choice"))
                        
     # Aviso de sobrescritura (si aplica)
-    if ss.get("ow_pending"):
+    if st.session_state.get("ow_pending"):
         st.warning(f"La ruta «{ss['ow_pending']}» ya existe. ¿Sobrescribir?")
         cA, cB = st.columns(2)
         with cA:
@@ -393,8 +415,7 @@ def mostrar_profesional():
         if ss.get("last_gmaps_url"):
             gmaps_url = ss["last_gmaps_url"]
             
-            # === Generación de URLs para Waze/Apple Maps (Corrección de tipo de dato) ===
-            # Verificamos que haya suficientes puntos para evitar errores en build_waze_url
+            # === Generación de URLs para Waze/Apple Maps ===
             if len(ss["prof_points"]) >= 2:
                 o_meta = resolve_selection(ss["prof_points"][0], None)
                 d_meta = resolve_selection(ss["prof_points"][-1], None)
@@ -403,19 +424,19 @@ def mostrar_profesional():
             else:
                 waze_url = "#"
                 apple_url = "#"
-            # ====================================================================
+            # ===============================================
 
             st.link_button("Abrir en Google Maps", gmaps_url, type="primary", use_container_width=True)
             st.link_button("Abrir en Waze", waze_url, use_container_width=True)
             st.link_button("Copiar enlace", gmaps_url, help="Copiar URL al portapapeles", use_container_width=True)
-# ... (TUS BOTONES DE ENLACE TERMINAN AQUÍ)
             
-            # === CÓDIGO A AÑADIR (PARA EL QR) ===
+            # === IMPLEMENTACIÓN DEL QR ===
             st.markdown("---")
             st.caption("Escanea el QR (Google Maps)")
-            img_buf = _qr_image_for(gmaps_url) # Llamada a la función que crea la imagen
-            st.image(img_buf, caption="QR", width=150) # Renderiza la imagen
-            # ====================================
+            img_buf = _qr_image_for(gmaps_url)
+            st.image(img_buf, caption="QR", width=150)
+            # =============================
+
     with col_met:
         st.subheader("Optimización y Métricas")
         
